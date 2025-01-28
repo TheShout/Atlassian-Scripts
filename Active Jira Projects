@@ -1,0 +1,100 @@
+import os
+from jira import JIRA
+from atlassian import Confluence
+from html import escape
+
+# User input for credentials
+jira_server = 'JIRA_URL'
+confluence_server = 'CONFLUENCE_URL'
+jira_user = 'USER_NAME'
+
+# Retrieve API token from environment variables
+jira_api_token = os.getenv('JIRA_API_TOKEN')  # Using the environment variable for the Jira API token
+
+if not jira_api_token:
+    print('Jira API token is not set in the environment variables.')
+    exit(1)
+
+# Print URLs for debugging
+print(f"Connecting to JIRA server: {jira_server}")
+print(f"Connecting to Confluence server: {confluence_server}")
+
+# Connect to JIRA
+jira_options = {'server': jira_server}
+try:
+    jira = JIRA(options=jira_options, basic_auth=(jira_user, jira_api_token))
+    print("Successfully connected to JIRA")
+except Exception as e:
+    print(f"Failed to connect to JIRA: {e}")
+    exit()
+
+# Connect to Confluence
+try:
+    confluence = Confluence(
+        url=confluence_server,
+        username=jira_user,
+        password=jira_api_token
+    )
+    print("Successfully connected to Confluence")
+except Exception as e:
+    print(f"Failed to connect to Confluence: {e}")
+    exit()
+
+# Fetch all Jira projects
+try:
+    projects = jira.projects()
+    print("Successfully fetched Jira projects")
+except Exception as e:
+    print(f"Failed to fetch Jira projects: {e}")
+    exit()
+
+# Prepare content for the Confluence page
+page_content = "<h1>JIRA Projects</h1>\n"
+page_content += "<h2>Please see <a href='https://cslagile.atlassian.net/wiki/spaces/SYSDOC/pages/111772310/Jira+Projects'>documentation</a></h2>\n"
+page_content += "<table>"
+page_content += "<tr><th>Project Name</th><th>Key</th><th>Category</th><th>Lead</th><th>Type</th></tr>"
+
+for project in projects:
+    try:
+        project_detail = jira.project(project.key)
+        project_name = escape(project.name)
+        project_key = escape(project.key)
+        project_category = escape(project_detail.projectCategory.name) if hasattr(project_detail, 'projectCategory') else "None"
+        project_lead = escape(project_detail.lead.displayName) if project_detail.lead else "None"
+        project_type = escape(project_detail.projectTypeKey)
+
+        page_content += f"<tr><td>{project_name}</td><td>{project_key}</td><td>{project_category}</td><td>{project_lead}</td><td>{project_type}</td></tr>"
+    except Exception as e:
+        print(f"Error retrieving details for project {project.key}: {e}")
+
+page_content += "</table>"
+
+# Define Confluence page parameters
+space_key = 'SYSDOC'  # Replace with your Confluence space key
+page_title = 'Active CSL-Agile Jira Projects'
+
+# Debug: Output the page content
+print("Page Content:\n", page_content)
+
+# Create or update Confluence page
+try:
+    existing_page = confluence.get_page_by_title(space_key, page_title)
+    if existing_page:
+        # Update the existing page
+        confluence.update_page(
+            page_id=existing_page['id'],
+            title=page_title,
+            body=page_content
+        )
+        print("Confluence page has been updated successfully.")
+    else:
+        # Create a new page
+        confluence.create_page(
+            space=space_key,
+            title=page_title,
+            body=page_content
+        )
+        print("Confluence page has been created successfully.")
+except Exception as e:
+    print(f"Failed to create/update Confluence page: {e}")
+    print(f"Page content: {page_content}")
