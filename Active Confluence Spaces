@@ -1,0 +1,149 @@
+import requests
+import json
+
+# Define your Confluence instance details
+confluence_url = 'CONFLUENCE_URL'
+username = 'USER_NAME'  # Use your email address here
+api_token = 'API_TOKEN'  # Your API token here
+page_title = 'PAGE_TITLE'
+target_space_key = 'SPACE_KEY'  # Replace with the space key where you want to create the page
+
+# Function to print response details for debugging
+def print_response_details(response):
+    print(f'Status Code: {response.status_code}')
+    print(f'Response Text: {response.text}')
+    try:
+        print(f'JSON Response: {response.json()}')
+    except json.JSONDecodeError:
+        print('Response is not in JSON format')
+
+# Test request to verify credentials
+test_url = f'{confluence_url}/rest/api/user/current'
+response = requests.get(test_url, auth=(username, api_token), timeout=10)
+
+print("Testing credentials with a simple request...")
+print_response_details(response)
+
+if response.status_code != 200:
+    print('Failed to verify credentials. Please check your username and API token.')
+    exit(1)
+
+# Function to get all spaces with pagination
+def get_all_spaces(confluence_url, auth):
+    spaces = []
+    start = 0
+    limit = 25  # Adjust this limit as needed
+    while True:
+        spaces_url = f'{confluence_url}/rest/api/space?start={start}&limit={limit}'
+        response = requests.get(spaces_url, auth=auth, timeout=10)
+        if response.status_code != 200:
+            print('Failed to fetch spaces.')
+            print_response_details(response)
+            break
+        data = response.json()
+        spaces.extend(data['results'])
+        if 'next' not in data['_links']:
+            break
+        start += limit
+    return spaces
+
+# Function to get space details including creator
+def get_space_details(space_key, confluence_url, auth):
+    space_details_url = f'{confluence_url}/rest/api/space/{space_key}?expand=metadata.labels,history.createdBy'
+    response = requests.get(space_details_url, auth=auth, timeout=10)
+    if response.status_code != 200:
+        print(f'Failed to fetch details for space: {space_key}')
+        print_response_details(response)
+        return None
+    return response.json()
+
+# Get the list of all spaces
+spaces = get_all_spaces(confluence_url, (username, api_token))
+
+if not spaces:
+    print('No spaces found or failed to fetch spaces.')
+    exit(1)
+
+# Create the content for the new Confluence page
+content_body = "<h1>Active CSL Agile Confluence Spaces</h1>\n"
+content_body += "<h2>Please see <a href='https://cslagile.atlassian.net/wiki/spaces/SYSDOC/pages/111837695/Confluence+Spaces'>documentation</a></h2>\n"
+content_body += "<table><tr><th>Space Name</th><th>Space Key</th><th>Space URL</th><th>Created By</th></tr>"
+
+for space in spaces:
+    space_name = space['name']
+    space_key = space['key']  # This is for iteration, unrelated to the target space
+    space_details = get_space_details(space_key, confluence_url, (username, api_token))
+    if not space_details:
+        continue
+    space_url = space_details['_links']['base'] + space_details['_links']['webui']
+    created_by = space_details['history']['createdBy']['displayName']
+    content_body += f"<tr><td>{space_name}</td><td>{space_key}</td><td><a href='{space_url}'>{space_url}</a></td><td>{created_by}</td></tr>"
+
+content_body += "</table>"
+
+# Check if a page with the same title already exists in the target space
+search_page_url = f'{confluence_url}/rest/api/content'
+search_params = {
+    'title': page_title,
+    'spaceKey': target_space_key,
+    'expand': 'version'
+}
+response = requests.get(search_page_url, auth=(username, api_token), params=search_params, timeout=10)
+
+if response.status_code != 200:
+    print('Failed to search for existing page.')
+    print_response_details(response)
+    exit(1)
+
+search_results = response.json().get('results', [])
+
+if search_results:
+    # Page exists, update it
+    existing_page = search_results[0]
+    page_id = existing_page['id']
+    version_number = existing_page['version']['number'] + 1
+
+    update_page_url = f'{confluence_url}/rest/api/content/{page_id}'
+    data = {
+        'id': page_id,
+        'type': 'page',
+        'title': page_title,
+        'version': {
+            'number': version_number
+        },
+        'space': {'key': target_space_key},
+        'body': {
+            'storage': {
+                'value': content_body,
+                'representation': 'storage'
+            }
+        }
+    }
+
+    response = requests.put(update_page_url, auth=(username, api_token), headers={'Content-Type': 'application/json'}, data=json.dumps(data), timeout=10)
+
+    if response.status_code == 200:
+        print(f'Page "{page_title}" updated successfully.')
+    else:
+        print(f'Failed to update page. Status code: {response.status_code}, Response: {response.text}')
+else:
+    # Page does not exist, create a new one
+    create_page_url = f'{confluence_url}/rest/api/content/'
+    data = {
+        'type': 'page',
+        'title': page_title,
+        'space': {'key': target_space_key},
+        'body': {
+            'storage': {
+                'value': content_body,
+                'representation': 'storage'
+            }
+        }
+    }
+
+    response = requests.post(create_page_url, auth=(username, api_token), headers={'Content-Type': 'application/json'}, data=json.dumps(data), timeout=10)
+
+    if response.status_code == 200 or response.status_code == 201:
+        print(f'Page "{page_title}" created successfully.')
+    else:
+        print(f'Failed to create page. Status code: {response.status_code}, Response: {response.text}')
