@@ -66,7 +66,7 @@ if not spaces:
 
 # Create the content for the new Confluence page
 content_body = "<h1>Active CSL Agile Confluence Spaces</h1>\n"
-content_body += "<h2>Please see <a href='https://cslagile.atlassian.net/wiki/spaces/SYSDOC/pages/111837695/Confluence+Spaces'>documentation</a></h2>\n"
+content_body += "<h2>Please see <a href='https://confluence_link'>documentation</a></h2>\n"
 content_body += "<table><tr><th>Space Name</th><th>Space Key</th><th>Space URL</th><th>Created By</th></tr>"
 
 for space in spaces:
