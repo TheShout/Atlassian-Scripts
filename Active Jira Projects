@@ -50,7 +50,7 @@ except Exception as e:
 
 # Prepare content for the Confluence page
 page_content = "<h1>JIRA Projects</h1>\n"
-page_content += "<h2>Please see <a href='https://cslagile.atlassian.net/wiki/spaces/SYSDOC/pages/111772310/Jira+Projects'>documentation</a></h2>\n"
+page_content += "<h2>Please see <a href='https://confluence_instance'>documentation</a></h2>\n"
 page_content += "<table>"
 page_content += "<tr><th>Project Name</th><th>Key</th><th>Category</th><th>Lead</th><th>Type</th></tr>"
 
@@ -70,8 +70,8 @@ for project in projects:
 page_content += "</table>"
 
 # Define Confluence page parameters
-space_key = 'SYSDOC'  # Replace with your Confluence space key
-page_title = 'Active CSL-Agile Jira Projects'
+space_key = 'soake_key'  # Replace with your Confluence space key
+page_title = 'Active Jira Projects'
 
 # Debug: Output the page content
 print("Page Content:\n", page_content)
